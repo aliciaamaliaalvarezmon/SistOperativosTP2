@@ -8,7 +8,7 @@
 #include <atomic>
 #include <mpi.h>
 #include <map>
-
+//esto es el la informacion del nodo(cantidad fija) (creo, agregado por Alicia)
 int total_nodes, mpi_rank;
 Block *last_block_in_chain;
 map<string,Block> node_blocks;
@@ -85,11 +85,19 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
   return false;
 }
 
-
+//int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
 //Envia el bloque minado a todos los nodos
 void broadcast_block(const Block *block){
-  //No enviar a mí mismo
+  //No enviar a mí mismo  
   //TODO: Completar
+  unsigned int cantidad_de_nodos_a_los_que_mensajee = 1; 
+  unsigned int cant_de_nodos_yo_exclusive = total_nodes -1;
+  while (cantidad_de_nodos_a_los_que_mensajee < cant_de_nodos_yo_exclusive){
+    unsigned int rank_a_mensajear = (mpi_rank + cantidad_de_nodos_a_los_que_mensajee) % total_nodes;
+    MPI_Send(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD);
+    cantidad_de_nodos_a_los_que_mensajee++;
+  }//no a mi mismo
+  //idea: va a enviar en circulo a todos los nodos que le siguen. (Mesa redonda)
 }
 
 //Proof of work

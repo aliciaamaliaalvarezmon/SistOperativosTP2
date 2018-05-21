@@ -164,18 +164,46 @@ int node(){
   last_block_in_chain->created_at = static_cast<unsigned long int> (time(NULL));
   memset(last_block_in_chain->previous_block_hash,0,HASH_SIZE);
 
-  //TODO: Crear thread para minar
+  //TODO: Crear thread para minar //Punto 2
+
+  pthread_t thread[2]; //se supone que la thread mina mientras esto escucha?y la otra escucha  
+ 
+    pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
+    pthread_join(thread[0], NULL);
+
+
+  //  pthread_t thread[realnt];
+  //int tid;  
+  //for(tid = 0; tid <  realnt; tid++  ){
+  //  pthread_create(&thread[tid], NULL, maxola, &aux );//le pasa a max el struct Hashcontador, con nuestro hash y la thread    
+  //}
+  //for (tid = 0; tid < realnt; ++tid){
+  //      pthread_join(thread[tid], NULL);
+  //  }Ejemplo sacado de tp1 
+
+
+
 
   while(true){
 
+
+
       //TODO: Recibir mensajes de otros nodos
-
-      //TODO: Si es un mensaje de nuevo bloque, llamar a la función
-      // validate_block_for_chain con el bloque recibido y el estado de MPI
-
-      //TODO: Si es un mensaje de pedido de cadena,
-      //responderlo enviando los bloques correspondientes
-
+    Block* blockr;
+    char* hash_hex_str[32];
+    MPI_Status status;
+    //TODO: Si es un mensaje de nuevo bloque, llamar a la función
+    // validate_block_for_chain con el bloque recibido y el estado de MPI
+    if( MPI_Recv(blockr, sizeof(MPI_BLOCK), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status)){
+      validate_block_for_chain(blockr, &status);
+    }
+    //TODO: Si es un mensaje de pedido de cadena,
+    //responderlo enviando los bloques correspondientes
+    if(MPI_Recv(hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status)){
+      //armo lista de validation_block blockes y la mando
+     // MPI_Send(lista, sizeof(lista), ,mpi_rank, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);
+    }
+   //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor, no se si esta bien, pero bueno.
   }
 
   delete last_block_in_chain;

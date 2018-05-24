@@ -15,18 +15,29 @@ map<string,Block> node_blocks;
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
 //Si nos separan más de VALIDATION_BLOCKS bloques de distancia entre las cadenas, se descarta por seguridad
+
+//int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
 bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
   //TODO: Enviar mensaje TAG_CHAIN_HASH
 
+  MPI_Send((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD);
+
   Block *blockchain = new Block[VALIDATION_BLOCKS];
 
   //TODO: Recibir mensaje TAG_CHAIN_RESPONSE
+  MPI_Status status2;
+  MPI_Recv(blockchain, sizeof(*blockchain), *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, &status2);
 
   //TODO: Verificar que los bloques recibidos
   //sean válidos y se puedan acoplar a la cadena
     //delete []blockchain;
     //return true;
+  int i = 0;
+  while(i < VALIDATION_BLOCKS){
+    //falta el calculo
+    i++;
+  }
 
 
   delete []blockchain;
@@ -175,6 +186,21 @@ void* proof_of_work(void *ptr){
 }
 
 
+
+
+
+
+//MPI_Status
+
+//struct MPI_Struct {
+//  int MPI_SOURCE;
+//  int MPI_TAG;
+//  int MPI_ERROR;
+// int _cancelled;
+//  size_t _ucount;
+//};
+
+
 int node(){
 
   //Tomar valor de mpi_rank y de nodos totales
@@ -216,8 +242,17 @@ int node(){
     //TODO: Si es un mensaje de pedido de cadena,
     //responderlo enviando los bloques correspondientes
     if(MPI_Recv(hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status)){
+     // Block* actual = node_blocks.find(hash_hex_str);//devuelve iterador porque se supone que ya esta en node_blocks.      
+      Block* actual;
+      Block lista[VALIDATION_BLOCKS];
+      int i = 0;      
+      while((i  < VALIDATION_BLOCKS) or (actual->index > 0)){
+      //  lista[i] = (*(node_blocks.find(actual->previous_block_hash)));
+       // actual = node_blocks.find(actual->previous_block_hash);
+        i++;
+      }//lo del map devolviendo iteradores probablemente rompa
       //armo lista de validation_block blockes y la mando
-     // MPI_Send(lista, sizeof(lista), ,mpi_rank, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);
+      MPI_Send(lista, sizeof(lista), *MPI_BLOCK ,mpi_rank, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);
     }
    //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor, no se si esta bien, pero bueno.
   }

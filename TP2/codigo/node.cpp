@@ -10,7 +10,7 @@
 #include <map>
 //esto es el la informacion del nodo(cantidad fija) (creo, agregado por Alicia)
 int total_nodes, mpi_rank;
-Block *last_block_in_chain;
+Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_block_in_chain;;
 map<string,Block> node_blocks;
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
@@ -46,13 +46,23 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
     //entonces lo agrego como nuevo último.
       //printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
       //return true;
-
+    //MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank); Me parece que no debo usarlo aqui porque node lo llamo antes.......
+    if( ((rBlock->index) == 1) and (last_block_in_chain->index == 0)){
+      printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
+      *last_block_in_chain = *rBlock;
+      return true;
+    }
     //TODO: Si el índice del bloque recibido es
     //el siguiente a mí último bloque actual,
     //y el bloque anterior apuntado por el recibido es mí último actual,
     //entonces lo agrego como nuevo último.
       //printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
       //return true;
+    if(((rBlock-> index) == (last_block_in_chain->index)+1) and ((rBlock->previous_block_hash) == (last_block_in_chain->block_hash))){
+      printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
+      *last_block_in_chain = *rBlock;
+      return true;
+    }   
 
     //TODO: Si el índice del bloque recibido es
     //el siguiente a mí último bloque actual,
@@ -61,24 +71,41 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
       //printf("[%d] Perdí la carrera por uno (%d) contra %d \n", mpi_rank, rBlock->index, status->MPI_SOURCE);
       //bool res = verificar_y_migrar_cadena(rBlock,status);
       //return res;
+    if(((rBlock-> index) == (last_block_in_chain->index)+1) and ((rBlock->previous_block_hash) == (last_block_in_chain->block_hash))){
+        printf("[%d] Perdí la carrera por uno (%d) contra %d \n", mpi_rank, rBlock->index, status->MPI_SOURCE);
+        bool res = verificar_y_migrar_cadena(rBlock,status);
+        return res;
+    }
 
 
     //TODO: Si el índice del bloque recibido es igua al índice de mi último bloque actual,
     //entonces hay dos posibles forks de la blockchain pero mantengo la mía
       //printf("[%d] Conflicto suave: Conflicto de branch (%d) contra %d \n",mpi_rank,rBlock->index,status->MPI_SOURCE);
       //return false;
+    if((rBlock-> index) == (last_block_in_chain->index)){
+      printf("[%d] Conflicto suave: Conflicto de branch (%d) contra %d \n",mpi_rank,rBlock->index,status->MPI_SOURCE);
+      return false;
+    }
 
     //TODO: Si el índice del bloque recibido es anterior al índice de mi último bloque actual,
     //entonces lo descarto porque asumo que mi cadena es la que está quedando preservada.
       //printf("[%d] Conflicto suave: Descarto el bloque (%d vs %d) contra %d \n",mpi_rank,rBlock->index,last_block_in_chain->index, status->MPI_SOURCE);
       //return false;
+    if((rBlock-> index) < (last_block_in_chain->index)){
+      printf("[%d] Conflicto suave: Descarto el bloque (%d vs %d) contra %d \n",mpi_rank,rBlock->index,last_block_in_chain->index, status->MPI_SOURCE);
+      return false;
+    }
 
     //TODO: Si el índice del bloque recibido está más de una posición adelantada a mi último bloque actual,
     //entonces me conviene abandonar mi blockchain actual
       //printf("[%d] Perdí la carrera por varios contra %d \n", mpi_rank, status->MPI_SOURCE);
       //bool res = verificar_y_migrar_cadena(rBlock,status);
       //return res;
-
+      if((rBlock-> index) > (last_block_in_chain->index) + 1){
+      printf("[%d] Perdí la carrera por varios contra %d \n", mpi_rank, status->MPI_SOURCE);
+      bool res = verificar_y_migrar_cadena(rBlock,status);
+      return res;
+    } 
   }
 
   printf("[%d] Error duro: Descarto el bloque recibido de %d porque no es válido \n",mpi_rank,status->MPI_SOURCE);
@@ -90,12 +117,15 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
 void broadcast_block(const Block *block){
   //No enviar a mí mismo  
   //TODO: Completar
+  //Tomo valor de mpi_rank y de nodos totales
+  MPI_Comm_size(MPI_COMM_WORLD, &total_nodes);
+  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
   unsigned int cantidad_de_nodos_a_los_que_mensajee = 1; 
   unsigned int cant_de_nodos_yo_exclusive = total_nodes -1;
   while (cantidad_de_nodos_a_los_que_mensajee < cant_de_nodos_yo_exclusive){
     unsigned int rank_a_mensajear = (mpi_rank + cantidad_de_nodos_a_los_que_mensajee) % total_nodes;
-    MPI_Send(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD);
-    cantidad_de_nodos_a_los_que_mensajee++;
+    MPI_Send(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD);//creo que en el taller hablamos de usar este no Mpi_Isend?   
+    cantidad_de_nodos_a_los_que_mensajee++;  
   }//no a mi mismo
   //idea: va a enviar en circulo a todos los nodos que le siguen. (Mesa redonda)
 }
@@ -166,29 +196,15 @@ int node(){
 
   //TODO: Crear thread para minar //Punto 2
 
-  pthread_t thread[2]; //se supone que la thread mina mientras esto escucha?y la otra escucha  
+  pthread_t thread[1]; //se supone que la thread mina mientras esto escucha?y la otra escucha  
  
-    pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
-    pthread_join(thread[0], NULL);
+   pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
+    
 
-
-  //  pthread_t thread[realnt];
-  //int tid;  
-  //for(tid = 0; tid <  realnt; tid++  ){
-  //  pthread_create(&thread[tid], NULL, maxola, &aux );//le pasa a max el struct Hashcontador, con nuestro hash y la thread    
-  //}
-  //for (tid = 0; tid < realnt; ++tid){
-  //      pthread_join(thread[tid], NULL);
-  //  }Ejemplo sacado de tp1 
-
-
-
-
+//Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
+   //Thread que escucha;
   while(true){
-
-
-
-      //TODO: Recibir mensajes de otros nodos
+    //TODO: Recibir mensajes de otros nodos
     Block* blockr;
     char* hash_hex_str[32];
     MPI_Status status;
@@ -205,7 +221,7 @@ int node(){
     }
    //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor, no se si esta bien, pero bueno.
   }
-
+  pthread_join(thread[0], NULL);//puede ser que no vaya;
   delete last_block_in_chain;
   return 0;
 }

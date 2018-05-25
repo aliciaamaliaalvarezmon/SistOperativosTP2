@@ -29,17 +29,54 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
   MPI_Status status2;
   MPI_Recv(blockchain, sizeof(*blockchain), *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, &status2);
 
+
   //TODO: Verificar que los bloques recibidos
   //sean válidos y se puedan acoplar a la cadena
     //delete []blockchain;
     //return true;
-  int i = 0;
-  while(i < VALIDATION_BLOCKS){
-    //falta el calculo
-    i++;
+  if((blockchain[0].block_hash != rBlock->block_hash) or (blockchain[0].index != rBlock->index)){
+    delete []blockchain;
+    return false;
+  }  
+
+  
+  string hashr;
+  block_to_hash(rBlock, hashr);
+
+  if(hashr!= rBlock->block_hash){
+     delete [] blockchain;
+     return false;
   }
 
-
+  const Block * actual = rBlock;
+  int i = 1;
+  while((i < VALIDATION_BLOCKS) and (actual->index > 0)){
+    if(valid_new_block(&blockchain[i])){
+      if((blockchain[i].block_hash != actual->previous_block_hash) or (blockchain[i].index != (actual->index-1)) ){
+        delete[] blockchain;
+        return false;
+      }
+    }else{
+       delete[] blockchain;
+       return false;
+    }
+    actual = &blockchain[i]; //que ya vimos esta bien, creo, sino como obtenemos ?
+    i++;    
+  }
+  //Si llegamos acá la blockchain esta bien definida
+  i = 0;
+  //rBlock que es igual a blockchain[0]
+  while((i < VALIDATION_BLOCKS) and (blockchain[i].index > 0) ){
+    if((node_blocks.count(string(blockchain[i].block_hash)) > 0) or (blockchain[i].index == 1)){
+      for(int j = 0; j > i; j--){
+        node_blocks[string(blockchain[j].block_hash)] = blockchain[j];          
+      }
+      last_block_in_chain = &blockchain[0];
+      delete[]  blockchain;
+      return true;
+    }
+    i++;
+  }
   delete []blockchain;
   return false;
 }
@@ -225,14 +262,16 @@ int node(){
   pthread_t thread[1]; //se supone que la thread mina mientras esto escucha?y la otra escucha  
  
    pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
-    
+   
+
+
 
 //Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
    //Thread que escucha;
   while(true){
     //TODO: Recibir mensajes de otros nodos
     Block* blockr;
-    char* hash_hex_str[32];
+    char hash_hex_str[HASH_SIZE];
     MPI_Status status;
     //TODO: Si es un mensaje de nuevo bloque, llamar a la función
     // validate_block_for_chain con el bloque recibido y el estado de MPI
@@ -241,14 +280,14 @@ int node(){
     }
     //TODO: Si es un mensaje de pedido de cadena,
     //responderlo enviando los bloques correspondientes
-    if(MPI_Recv(hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status)){
-     // Block* actual = node_blocks.find(hash_hex_str);//devuelve iterador porque se supone que ya esta en node_blocks.      
-      Block* actual;
+    if(MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status)){
+      Block actual = node_blocks[string(hash_hex_str)];    
       Block lista[VALIDATION_BLOCKS];
-      int i = 0;      
-      while((i  < VALIDATION_BLOCKS) or (actual->index > 0)){
-      //  lista[i] = (*(node_blocks.find(actual->previous_block_hash)));
-       // actual = node_blocks.find(actual->previous_block_hash);
+      lista[0] = actual;
+      int i = 1;      
+      while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
+        lista[i] = (node_blocks[string(actual.previous_block_hash)]);
+        actual = node_blocks[string(actual.previous_block_hash)];
         i++;
       }//lo del map devolviendo iteradores probablemente rompa
       //armo lista de validation_block blockes y la mando

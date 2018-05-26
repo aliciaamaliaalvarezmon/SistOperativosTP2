@@ -8,6 +8,16 @@
 
 using namespace std;
 
+bool hashIguales(const char a[HASH_SIZE] ,const char b[HASH_SIZE]){
+  bool x = true;
+  for(int i = 0; i < HASH_SIZE; i++){
+    if(a[i] != b[i]){
+      x = false;
+    }
+  }
+  return x;
+}
+
 //Verifica que el bloque llegado sea válido (tiempo creado y hash)
 //No verifica si corresponde agregarlo a la cadena (tampoco el caso de que no tenga antepasados válidos)
 bool valid_new_block(const Block *block){

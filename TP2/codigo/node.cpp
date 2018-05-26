@@ -12,6 +12,7 @@
 int total_nodes, mpi_rank;
 Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_block_in_chain;;
 map<string,Block> node_blocks;
+bool listo=false;
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
 //Si nos separan más de VALIDATION_BLOCKS bloques de distancia entre las cadenas, se descarta por seguridad
@@ -127,7 +128,7 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
     //entonces lo agrego como nuevo último.
       //printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
       //return true;
-    if(((rBlock-> index) == (last_block_in_chain->index)+1) and ((rBlock->previous_block_hash) == (last_block_in_chain->block_hash))){
+    if(((rBlock-> index) == (last_block_in_chain->index)+1) and hashIguales(rBlock->previous_block_hash, last_block_in_chain->block_hash)){
       printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
       *last_block_in_chain = *rBlock;
       return true;
@@ -140,7 +141,7 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
       //printf("[%d] Perdí la carrera por uno (%d) contra %d \n", mpi_rank, rBlock->index, status->MPI_SOURCE);
       //bool res = verificar_y_migrar_cadena(rBlock,status);
       //return res;
-    if(((rBlock-> index) == (last_block_in_chain->index)+1) and ((rBlock->previous_block_hash) == (last_block_in_chain->block_hash))){
+    if(((rBlock-> index) == (last_block_in_chain->index)+1) and !hashIguales(rBlock->previous_block_hash, last_block_in_chain->block_hash)){
         printf("[%d] Perdí la carrera por uno (%d) contra %d \n", mpi_rank, rBlock->index, status->MPI_SOURCE);
         bool res = verificar_y_migrar_cadena(rBlock,status);
         return res;
@@ -215,6 +216,12 @@ void* proof_of_work(void *ptr){
       block.node_owner_number = mpi_rank;
       block.difficulty = DEFAULT_DIFFICULTY;
       memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
+
+      if(block.index > MAX_BLOCKS){
+        listo=true;
+        printf("[%d]listo: %d\n", mpi_rank, listo);
+        break;
+      }
 
       //Agregar un nonce al azar al bloque para intentar resolver el problema
       gen_random_nonce(block.nonce);
@@ -292,7 +299,7 @@ int node(){
 
 //Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
    //Thread que escucha;
-  while(true){
+  while(!listo){
     //TODO: Recibir mensajes de otros nodos
     
     //TODO: Si es un mensaje de nuevo bloque, llamar a la función

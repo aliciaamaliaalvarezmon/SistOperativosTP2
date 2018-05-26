@@ -190,11 +190,11 @@ void broadcast_block(const Block *block){
   MPI_Comm_size(MPI_COMM_WORLD, &total_nodes);
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
   unsigned int cantidad_de_nodos_a_los_que_mensajee = 1; 
-  unsigned int cant_de_nodos_yo_exclusive = total_nodes -1;
+  unsigned int cant_de_nodos_yo_exclusive = total_nodes ;
   while (cantidad_de_nodos_a_los_que_mensajee < cant_de_nodos_yo_exclusive){
     unsigned int rank_a_mensajear = (mpi_rank + cantidad_de_nodos_a_los_que_mensajee) % total_nodes;
     MPI_Request request;
-    MPI_Isend(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD, &request);//creo que en el taller hablamos de usar este no Mpi_Isend?   
+    MPI_Isend(block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD, &request);//creo que en el taller hablamos de usar este no Mpi_Isend?   
     cantidad_de_nodos_a_los_que_mensajee++;  
   }//no a mi mismo
   //idea: va a enviar en circulo a todos los nodos que le siguen. (Mesa redonda)
@@ -286,23 +286,23 @@ int node(){
    pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
    
 
-
+   Block blockr;
+   char hash_hex_str[HASH_SIZE];
+   MPI_Status status;
 
 //Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
    //Thread que escucha;
   while(true){
     //TODO: Recibir mensajes de otros nodos
-    Block blockr;
-    char hash_hex_str[HASH_SIZE];
-    MPI_Status status;
+    
     //TODO: Si es un mensaje de nuevo bloque, llamar a la función
     // validate_block_for_chain con el bloque recibido y el estado de MPI
-    if( MPI_Recv(&blockr, sizeof(MPI_BLOCK), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status)){
+    if( MPI_Recv(&blockr, sizeof(blockr), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status) == MPI_SUCCESS){
       validate_block_for_chain(&blockr, &status);
     }
     //TODO: Si es un mensaje de pedido de cadena,
     //responderlo enviando los bloques correspondientes
-    if(MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status)){
+    if(MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status) == MPI_SUCCESS){
       Block actual = node_blocks[string(hash_hex_str)];    
       Block lista[VALIDATION_BLOCKS];
       lista[0] = actual;

@@ -50,7 +50,7 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
   const Block * actual = rBlock;
   int i = 1;
-  while((i < VALIDATION_BLOCKS) and (actual->index > 0)){
+  while((i < VALIDATION_BLOCKS) and (actual->index >= 1)){
     if(valid_new_block(&blockchain[i])){
       if((blockchain[i].block_hash != actual->previous_block_hash) or (blockchain[i].index != (actual->index-1)) ){
         delete[] blockchain;
@@ -63,20 +63,41 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
     actual = &blockchain[i]; //que ya vimos esta bien, creo, sino como obtenemos ?
     i++;    
   }
-  //Si llegamos acá la blockchain esta bien definida
-  i = 0;
+  //Si llegamos acá la blockchain esta bien definida y es válida
+
   //rBlock que es igual a blockchain[0]
-  while((i < VALIDATION_BLOCKS) and (blockchain[i].index > 0) ){
-    if((node_blocks.count(string(blockchain[i].block_hash)) > 0) or (blockchain[i].index == 1)){
-      for(int j = 0; j > i; j--){
-        node_blocks[string(blockchain[j].block_hash)] = blockchain[j];          
-      }
-      last_block_in_chain = &blockchain[0];
-      delete[]  blockchain;
-      return true;
+  if(blockchain[0].index <= VALIDATION_BLOCKS){
+    int m = 0;
+    while(blockchain[m].index >= 1){
+        node_blocks[string(blockchain[m].block_hash)] = blockchain[m];
+        m++;
     }
-    i++;
+    last_block_in_chain = &blockchain[0];
+    delete[] blockchain;
+    return true;
   }
+  //Si llego aca la cadena era mayor a VALIDATION_BLOCKS, me tengo que fijar si encaja con la cadena de alice. 
+  i = 0;
+  
+  Block* alice_actual = last_block_in_chain;
+  
+  int l = 0;
+  //cadena_alice tiene la cadena del nodo actual
+  while((l < VALIDATION_BLOCKS) and alice_actual->index > 0){
+    for(int j = 0; j < VALIDATION_BLOCKS; j++ ){         
+      if(alice_actual->block_hash == blockchain[j].block_hash){//vemos por hash porque block no tiene ==
+        for(int m = 0; m <= j; m++){
+          node_blocks[string(blockchain[m].block_hash)] = blockchain[m];      
+        }
+      last_block_in_chain = &blockchain[0];
+      delete[] blockchain;
+      return true;
+      }      
+    }
+    alice_actual = &node_blocks[string(alice_actual->previous_block_hash)];
+    l++;
+  }
+
   delete []blockchain;
   return false;
 }
@@ -172,7 +193,8 @@ void broadcast_block(const Block *block){
   unsigned int cant_de_nodos_yo_exclusive = total_nodes -1;
   while (cantidad_de_nodos_a_los_que_mensajee < cant_de_nodos_yo_exclusive){
     unsigned int rank_a_mensajear = (mpi_rank + cantidad_de_nodos_a_los_que_mensajee) % total_nodes;
-    MPI_Send(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD);//creo que en el taller hablamos de usar este no Mpi_Isend?   
+    MPI_Request *request;
+    MPI_Isend(&block, sizeof(block), *MPI_BLOCK,rank_a_mensajear,TAG_NEW_BLOCK,MPI_COMM_WORLD, request);//creo que en el taller hablamos de usar este no Mpi_Isend?   
     cantidad_de_nodos_a_los_que_mensajee++;  
   }//no a mi mismo
   //idea: va a enviar en circulo a todos los nodos que le siguen. (Mesa redonda)

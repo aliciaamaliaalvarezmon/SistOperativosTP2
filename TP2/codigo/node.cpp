@@ -8,6 +8,8 @@
 #include <atomic>
 #include <mpi.h>
 #include <map>
+#include <mutex>
+#include <iostream>
 //esto es el la informacion del nodo(cantidad fija) (creo, agregado por Alicia)
 int total_nodes, mpi_rank;
 Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_block_in_chain;;
@@ -296,31 +298,38 @@ int node(){
    Block blockr;
    char hash_hex_str[HASH_SIZE];
    MPI_Status status;
+   MPI_Request request;
+   int flag;
 
 //Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
    //Thread que escucha;
   while(!listo){
     //TODO: Recibir mensajes de otros nodos
     
+    
     //TODO: Si es un mensaje de nuevo bloque, llamar a la función
     // validate_block_for_chain con el bloque recibido y el estado de MPI
-    if( MPI_Recv(&blockr, sizeof(blockr), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status) == MPI_SUCCESS){
-      validate_block_for_chain(&blockr, &status);
-    }
-    //TODO: Si es un mensaje de pedido de cadena,
-    //responderlo enviando los bloques correspondientes
-    if(MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status) == MPI_SUCCESS){
-      Block actual = node_blocks[string(hash_hex_str)];    
-      Block lista[VALIDATION_BLOCKS];
-      lista[0] = actual;
-      int i = 1;      
-      while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
-        lista[i] = (node_blocks[string(actual.previous_block_hash)]);
-        actual = node_blocks[string(actual.previous_block_hash)];
-        i++;
-      }//lo del map devolviendo iteradores probablemente rompa
+    MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+    if(flag == true){
+      if(status.MPI_TAG == TAG_NEW_BLOCK){
+      MPI_Irecv(&blockr, sizeof(blockr), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &request);
+       validate_block_for_chain(&blockr, &status);
+      }else if(status.MPI_TAG == TAG_CHAIN_HASH){
+      //TODO: Si es un mensaje de pedido de cadena,
+      //responderlo enviando los bloques correspondientes
+      MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status);
+       Block actual = node_blocks[string(hash_hex_str)];    
+        Block lista[VALIDATION_BLOCKS];
+       lista[0] = actual;
+       int i = 1;      
+       while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
+         lista[i] = (node_blocks[string(actual.previous_block_hash)]);
+         actual = node_blocks[string(actual.previous_block_hash)];
+          i++;
+       }//lo del map devolviendo iteradores probablemente rompa
       //armo lista de validation_block blockes y la mando
-      MPI_Send(lista, sizeof(lista), *MPI_BLOCK ,mpi_rank, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);
+       MPI_Send(lista, sizeof(lista), *MPI_BLOCK ,mpi_rank, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);
+     }
     }
    //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor, no se si esta bien, pero bueno.
   }

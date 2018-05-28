@@ -27,19 +27,22 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
  MPI_Send((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD);
 
-  Block *blockchain = new Block[VALIDATION_BLOCKS];
-  cout <<"comparacion longitud blockchain" << sizeof(*blockchain) << endl;
+  Block *blockchain = new Block[VALIDATION_BLOCKS];  
   //TODO: Recibir mensaje TAG_CHAIN_RESPONSE
-  MPI_Status status2;
-  cout<< "["<<mpi_rank<< "]"<<"acá llegó" << endl; 
+  MPI_Status status2; 
   if(MPI_Recv(blockchain, sizeof(*blockchain), *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, &status2)== MPI_SUCCESS){
-  cout<< "se recibi el mensaje" << endl;
+ 
 
   //TODO: Verificar que los bloques recibidos
   //sean válidos y se puedan acoplar a la cadena
     //delete []blockchain;
     //return true;
-  if((blockchain[0].block_hash != rBlock->block_hash) or (blockchain[0].index != rBlock->index)){
+
+   // bool a = hashIguales(blockchain[0].block_hash, rBlock->block_hash);
+    //cout << "hashIguales es la posta"<< a << endl;
+   // bool b = (blockchain[0].index == rBlock->index); 
+  if((!hashIguales(blockchain[0].block_hash, rBlock->block_hash)) or (blockchain[0].index != rBlock->index)){
+    cout << "cadena invalida, hash" << endl;    
     delete []blockchain;
     return false;
   }  
@@ -57,11 +60,13 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
   int i = 1;
   while((i < VALIDATION_BLOCKS) and (actual->index >= 1)){
     if(valid_new_block(&blockchain[i])){
-      if((blockchain[i].block_hash != actual->previous_block_hash) or (blockchain[i].index != (actual->index-1)) ){
+      if((!hashIguales(blockchain[i].block_hash, actual->previous_block_hash)) or (blockchain[i].index != (actual->index-1))){
+        cout << "cadena invalida " << endl;
         delete[] blockchain;
         return false;
       }
     }else{
+        cout << "cadena invalida por bloque invalido" << endl; 
        delete[] blockchain;
        return false;
     }
@@ -72,6 +77,7 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
   //rBlock que es igual a blockchain[0]
   if(blockchain[0].index <= VALIDATION_BLOCKS){
+    cout <<"[" << mpi_rank <<"]"<<"cadena valida" << endl;
     int m = 0;
     while(blockchain[m].index >= 1){
         node_blocks[string(blockchain[m].block_hash)] = blockchain[m];
@@ -89,8 +95,9 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
   int l = 0;
   //cadena_alice tiene la cadena del nodo actual
   while((l < VALIDATION_BLOCKS) and alice_actual->index > 0){
+     cout <<"[" << mpi_rank <<"]"<<"cadena valida larga" << endl;
     for(int j = 0; j < VALIDATION_BLOCKS; j++ ){         
-      if(alice_actual->block_hash == blockchain[j].block_hash){//vemos por hash porque block no tiene ==
+      if(hashIguales(alice_actual->block_hash, blockchain[j].block_hash)){//vemos por hash porque block no tiene ==
         for(int m = 0; m <= j; m++){
           node_blocks[string(blockchain[m].block_hash)] = blockchain[m];      
         }
@@ -114,7 +121,10 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
 
     //Agrego el bloque al diccionario, aunque no
     //necesariamente eso lo agrega a la cadena
-    node_blocks[string(rBlock->block_hash)]=*rBlock;
+    node_blocks[string(rBlock->block_hash)]= *rBlock;
+
+    //cout <<  "hashp que asocio al bloque" <<node_blocks[string(rBlock->block_hash)].previous_block_hash << endl;
+    //cout << "hashp de bloque me llego"<< rBlock->previous_block_hash << endl;
 
     //TODO: Si el índice del bloque recibido es 1
     //y mí último bloque actual tiene índice 0,
@@ -124,7 +134,7 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
     //MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank); Me parece que no debo usarlo aqui porque node lo llamo antes.......
     if( ((rBlock->index) == 1) and (last_block_in_chain->index == 0)){
       printf("[%d] Agregado a la lista bloque con index %d enviado por %d \n", mpi_rank, rBlock->index,status->MPI_SOURCE);
-      *last_block_in_chain = *rBlock;
+      *last_block_in_chain = *rBlock;  
       return true;
     }
     //TODO: Si el índice del bloque recibido es
@@ -327,11 +337,9 @@ int node(){
        // cout << mpi_rank<<"llega" << endl;
       //TODO: Si es un mensaje de pedido de cadena,
       //responderlo enviando los bloques correspondientes
-      MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status3);
-       cout << mpi_rank<<"llega al rceive" << endl;
+      MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status3);       
        Block actual = node_blocks[string(hash_hex_str)];       
-       Block *lista = new Block[VALIDATION_BLOCKS];
-        cout << "comparacion long"<<sizeof(*lista)<< endl;
+       Block *lista = new Block[VALIDATION_BLOCKS];      
        lista[0] = actual;       
        int i = 1;      
        while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
@@ -341,7 +349,7 @@ int node(){
        }//lo del map devolviendo iteradores probablemente rompa
       //armo lista de validation_block blockes y la mando
        
-      // MPI_Send(lista, sizeof(*lista), *MPI_BLOCK ,status3.MPI_SOURCE, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);       
+      MPI_Send(lista, VALIDATION_BLOCKS, *MPI_BLOCK ,status3.MPI_SOURCE, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);       
        delete [] lista;
      }
    }
@@ -351,3 +359,13 @@ int node(){
   delete last_block_in_chain;
   return 0;
 }
+/*
+void mostrar(){
+  Block copia = *last_block_in_chain;
+  int contador = last_block_in_chain->index;
+  while(contador > 0){
+    printf("[%d] Bloque %d, Hash %d, previo %d\n", mpi_rank, copia.index, copia.block_hash[HASH_SIZE], copia.previous_block_hash[HASH_SIZE] );
+    copia = node_blocks[string(copia.previous_block_hash)];
+    contador--;
+  }
+}*/

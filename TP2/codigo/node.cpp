@@ -15,6 +15,7 @@ int total_nodes, mpi_rank;
 Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_block_in_chain;;
 map<string,Block> node_blocks;
 mutex primer;
+mutex second;
 bool listo=false;
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
@@ -38,9 +39,6 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
     //delete []blockchain;
     //return true;
 
-   // bool a = hashIguales(blockchain[0].block_hash, rBlock->block_hash);
-    //cout << "hashIguales es la posta"<< a << endl;
-   // bool b = (blockchain[0].index == rBlock->index); 
   if((!hashIguales(blockchain[0].block_hash, rBlock->block_hash)) or (blockchain[0].index != rBlock->index)){
     cout << "cadena invalida, hash" << endl;    
     delete []blockchain;
@@ -83,7 +81,8 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
         node_blocks[string(blockchain[m].block_hash)] = blockchain[m];
         m++;
     }
-    last_block_in_chain = &blockchain[0];
+    *last_block_in_chain = blockchain[0];
+    cout <<"[" << mpi_rank <<"]"<<"termine de pasar cadena corta valida" << endl;
     delete[] blockchain;
     return true;
   }
@@ -95,16 +94,20 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
   int l = 0;
   //cadena_alice tiene la cadena del nodo actual
   while((l < VALIDATION_BLOCKS) and alice_actual->index > 0){
-     cout <<"[" << mpi_rank <<"]"<<"cadena valida larga" << endl;
+    cout <<"[" << mpi_rank <<"]"<<"cadena valida larga" << endl;
     for(int j = 0; j < VALIDATION_BLOCKS; j++ ){         
       if(hashIguales(alice_actual->block_hash, blockchain[j].block_hash)){//vemos por hash porque block no tiene ==
         for(int m = 0; m <= j; m++){
           node_blocks[string(blockchain[m].block_hash)] = blockchain[m];      
         }
-      last_block_in_chain = &blockchain[0];
+      *last_block_in_chain = blockchain[0];
+      cout <<"[" << mpi_rank <<"]"<<"termine de pasar cadena larga valida" << endl;
+      second.lock();
       delete[] blockchain;
-      return true;
-      }      
+      second.unlock();
+      cout << "borro bien" << endl;
+      return true;      
+      }
     }
     alice_actual = &node_blocks[string(alice_actual->previous_block_hash)];
     l++;
@@ -234,7 +237,7 @@ void* proof_of_work(void *ptr){
 
       if(block.index > MAX_BLOCKS){
         listo=true;
-        printf("[%d]listo: %d\n", mpi_rank, listo);
+        printf("[%d]listo: %d, index %d : \n", mpi_rank, listo, block.index);
         break;
       }
 
@@ -346,14 +349,14 @@ int node(){
          lista[i] = (node_blocks[string(actual.previous_block_hash)]);
          actual = node_blocks[string(actual.previous_block_hash)];
           i++;
-       }//lo del map devolviendo iteradores probablemente rompa
+       }
       //armo lista de validation_block blockes y la mando
        
       MPI_Send(lista, VALIDATION_BLOCKS, *MPI_BLOCK ,status3.MPI_SOURCE, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD);       
-       delete [] lista;
+      delete [] lista;
      }
    }
-   //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor, no se si esta bien, pero bueno.
+   //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor
   }
   pthread_join(thread[0], NULL);//puede ser que no vaya;
   delete last_block_in_chain;

@@ -16,6 +16,7 @@ Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_
 map<string,Block> node_blocks;
 mutex primer;
 mutex second;
+mutex tercer[8];
 bool listo=false;
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
@@ -101,10 +102,8 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
           node_blocks[string(blockchain[m].block_hash)] = blockchain[m];      
         }
       *last_block_in_chain = blockchain[0];
-      cout <<"[" << mpi_rank <<"]"<<"termine de pasar cadena larga valida" << endl;
-      second.lock();
-      delete[] blockchain;
-      second.unlock();
+      cout <<"[" << mpi_rank <<"]"<<"termine de pasar cadena larga valida" << endl;     
+      delete[] blockchain;      
       cout << "borro bien" << endl;
       return true;      
       }
@@ -161,7 +160,9 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
       //return res;
     if(((rBlock-> index) == (last_block_in_chain->index)+1) and !hashIguales(rBlock->previous_block_hash, last_block_in_chain->block_hash)){
         printf("[%d] Perdí la carrera por uno (%d) contra %d \n", mpi_rank, rBlock->index, status->MPI_SOURCE);
+        tercer[mpi_rank].lock();
         bool res = verificar_y_migrar_cadena(rBlock,status);
+        tercer[mpi_rank].unlock();
         return res;
     }
 
@@ -191,7 +192,9 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
       //return res;
       if((rBlock-> index) > (last_block_in_chain->index) + 1){
       printf("[%d] Perdí la carrera por varios contra %d \n", mpi_rank, status->MPI_SOURCE);
+      tercer[mpi_rank].lock();
       bool res = verificar_y_migrar_cadena(rBlock,status);
+      tercer[mpi_rank].unlock();
       return res;
     } 
   }
@@ -236,8 +239,10 @@ void* proof_of_work(void *ptr){
       memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
 
       if(block.index > MAX_BLOCKS){
+        second.lock();
         listo=true;
         printf("[%d]listo: %d, index %d : \n", mpi_rank, listo, block.index);
+        second.unlock();
         break;
       }
 
@@ -269,8 +274,8 @@ void* proof_of_work(void *ptr){
       }
 
     }
-
-    return NULL;
+    pthread_exit(NULL);
+    //return NULL;
 }
 
 
@@ -314,7 +319,6 @@ int node(){
  
    pthread_create(&thread[0], NULL, proof_of_work, NULL );//me parece que el parametro que se le pasa a prood_of_work no importa;
    
-
    Block blockr;
    char hash_hex_str[HASH_SIZE];
    MPI_Status status;
@@ -326,21 +330,22 @@ int node(){
 //Aca ya hay 2 threads una va a prrof_of_work y otra sigue el codigo
    //Thread que escucha;
   while(!listo){
-    //TODO: Recibir mensajes de otros nodos
-    
-    
+    //TODO: Recibir mensajes de otros nodos   
     //TODO: Si es un mensaje de nuevo bloque, llamar a la función
     // validate_block_for_chain con el bloque recibido y el estado de MPI
     MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-   if(flag == true){
-      if(status.MPI_TAG == TAG_NEW_BLOCK){
+   if((flag == true) and primer.try_lock()){          
+      if(status.MPI_TAG == TAG_NEW_BLOCK and tercer[mpi_rank].try_lock()){           
       MPI_Recv(&blockr, sizeof(blockr), *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status2);
+      tercer[mpi_rank].unlock();     
+      primer.unlock();  
        validate_block_for_chain(&blockr, &status);
       }else if(status.MPI_TAG == TAG_CHAIN_HASH){
        // cout << mpi_rank<<"llega" << endl;
       //TODO: Si es un mensaje de pedido de cadena,
-      //responderlo enviando los bloques correspondientes
-      MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status3);       
+      //responderlo enviando los bloques correspondientes          
+      MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status3);
+      primer.unlock();     
        Block actual = node_blocks[string(hash_hex_str)];       
        Block *lista = new Block[VALIDATION_BLOCKS];      
        lista[0] = actual;       
@@ -358,7 +363,7 @@ int node(){
    }
    //MPI_ANI_SOURCE recibe mensajes desde cualquier emisor
   }
-  pthread_join(thread[0], NULL);//puede ser que no vaya;
+  //pthread_join(thread[0], NULL);//puede ser que no vaya;
   delete last_block_in_chain;
   return 0;
 }

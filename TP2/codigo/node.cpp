@@ -236,6 +236,7 @@ void* proof_of_work(void *ptr){
       block.index += 1;
       block.node_owner_number = mpi_rank;
       block.difficulty = DEFAULT_DIFFICULTY;
+      block.created_at = static_cast<unsigned long int> (time(NULL));
       memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
 
       if(block.index > MAX_BLOCKS){
@@ -310,7 +311,7 @@ int node(){
   last_block_in_chain->index = 0;
   last_block_in_chain->node_owner_number = mpi_rank;
   last_block_in_chain->difficulty = DEFAULT_DIFFICULTY;
-  last_block_in_chain->created_at = static_cast<unsigned long int> (time(NULL));
+  
   memset(last_block_in_chain->previous_block_hash,0,HASH_SIZE);
 
   //TODO: Crear thread para minar //Punto 2

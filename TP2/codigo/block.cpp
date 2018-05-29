@@ -54,7 +54,7 @@ bool valid_new_block(const Block *block){
   bool valid = block->created_at + 60 * VALIDATION_MINUTES >= current_time;
 
   //Que el hash guardado sea válido
-  valid = valid || (block_to_str(block).compare(block->block_hash) == 0);
+  valid = valid && (block_to_str(block).compare(block->block_hash) == 0);
 
   return valid;
 }

@@ -8,12 +8,39 @@
 
 using namespace std;
 
+
+
+void mostrarBlock(Block b){
+	printf("Indice: %u\n", b.index);
+	printf("Owner: %u\n", b.node_owner_number);
+	printf("Difficulty: %u\n", b.difficulty);
+	printf("Creado: %lu\n", b.created_at);
+
+	printf("Nonce: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.nonce[i]);
+	}
+	printf("\n");
+
+	printf("Previous Block: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.previous_block_hash[i]);	
+	}
+	printf("\n");
+
+	printf("Block hash: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.block_hash[i]);	
+	}
+	printf("\n");
+}
+
 bool hashIguales(const char a[HASH_SIZE] ,const char b[HASH_SIZE]){
   bool x = true;
   for(int i = 0; i < HASH_SIZE; i++){
-    if(a[i] != b[i]){
-      x = false;
-    }
+	if(a[i] != b[i]){
+	  x = false;
+	}
   }
   return x;
 }
@@ -27,7 +54,7 @@ bool valid_new_block(const Block *block){
   bool valid = block->created_at + 60 * VALIDATION_MINUTES >= current_time;
 
   //Que el hash guardado sea válido
-  valid = valid || block_to_str(block).compare(block->block_hash) == 0;
+  valid = valid || (block_to_str(block).compare(block->block_hash) == 0);
 
   return valid;
 }
@@ -35,46 +62,46 @@ bool valid_new_block(const Block *block){
 //Caracter hexagesimal a binario
 const char* hex_char_to_bin(char c)
 {
-    switch(toupper(c))
-    {
-        case '0': return "0000";
-        case '1': return "0001";
-        case '2': return "0010";
-        case '3': return "0011";
-        case '4': return "0100";
-        case '5': return "0101";
-        case '6': return "0110";
-        case '7': return "0111";
-        case '8': return "1000";
-        case '9': return "1001";
-        case 'A': return "1010";
-        case 'B': return "1011";
-        case 'C': return "1100";
-        case 'D': return "1101";
-        case 'E': return "1110";
-        default: return "1111";
-    }
+	switch(toupper(c))
+	{
+		case '0': return "0000";
+		case '1': return "0001";
+		case '2': return "0010";
+		case '3': return "0011";
+		case '4': return "0100";
+		case '5': return "0101";
+		case '6': return "0110";
+		case '7': return "0111";
+		case '8': return "1000";
+		case '9': return "1001";
+		case 'A': return "1010";
+		case 'B': return "1011";
+		case 'C': return "1100";
+		case 'D': return "1101";
+		case 'E': return "1110";
+		default: return "1111";
+	}
 }
 
 //String hexagesimal a binario
 string hex_str_to_bin_str(const string& hex)
 {
-    string bin;
-    for(unsigned i = 0; i != hex.length(); ++i)
-       bin += hex_char_to_bin(hex[i]);
-    return bin;
+	string bin;
+	for(unsigned i = 0; i != hex.length(); ++i)
+	   bin += hex_char_to_bin(hex[i]);
+	return bin;
 }
 
 //Generar nonce alfanumérico al azar
 void gen_random_nonce(char *s) {
   for (int i = 0; i < NONCE_SIZE-1; ++i) {
-    int randomChar = rand()%(26+26+10);
-    if (randomChar < 26)
-      s[i] = 'a' + randomChar;
-    else if (randomChar < 26+26)
-      s[i] = 'A' + randomChar - 26;
-    else
-      s[i] = '0' + randomChar - 26 - 26;
+	int randomChar = rand()%(26+26+10);
+	if (randomChar < 26)
+	  s[i] = 'a' + randomChar;
+	else if (randomChar < 26+26)
+	  s[i] = 'A' + randomChar - 26;
+	else
+	  s[i] = '0' + randomChar - 26 - 26;
   }
   s[NONCE_SIZE-1] = 0;
 }
@@ -115,14 +142,14 @@ void define_block_data_type_for_MPI(MPI_Datatype *new_type){
   //Crear la estructura para el nuevo tipo
   status = MPI_Type_create_struct(3, block_lengths, displacements, types, new_type);
   if (status != MPI_SUCCESS){
-      fprintf(stderr, "Error al crear el tipo\n");
-      MPI_Abort(MPI_COMM_WORLD, status);
+	  fprintf(stderr, "Error al crear el tipo\n");
+	  MPI_Abort(MPI_COMM_WORLD, status);
   }
 
   //Confirmar el nuevo tipo
   status = MPI_Type_commit(new_type);
   if (status != MPI_SUCCESS){
-    fprintf(stderr, "Error al confirmar el tipo\n");
-    MPI_Abort(MPI_COMM_WORLD, status);
+	fprintf(stderr, "Error al confirmar el tipo\n");
+	MPI_Abort(MPI_COMM_WORLD, status);
   }
 }

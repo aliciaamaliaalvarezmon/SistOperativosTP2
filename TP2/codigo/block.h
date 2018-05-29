@@ -24,7 +24,7 @@ struct Block {
   char block_hash[HASH_SIZE];
 };
 
-
+void mostrarBlock(Block);
 bool hashIguales(const char[HASH_SIZE], const char[HASH_SIZE]);
 bool solves_problem(const string& hash);
 void gen_random_nonce(char *s);

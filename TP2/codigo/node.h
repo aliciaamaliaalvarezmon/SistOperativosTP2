@@ -5,9 +5,10 @@
 #include "block.h"
 
 #define TAG_NEW_BLOCK 10
+#define TAG_FIN 5
 #define TAG_CHAIN_HASH 21
 #define TAG_CHAIN_RESPONSE 22
-#define MAX_BLOCKS 200
+#define MAX_BLOCKS 2
 
 extern MPI_Datatype* MPI_BLOCK;
 

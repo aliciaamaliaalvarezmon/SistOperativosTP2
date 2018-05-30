@@ -4,22 +4,60 @@
 #include <cstring>
 #include <cstddef>
 #include <string>
-
+#include <iostream>
 
 using namespace std;
 
-
-
 void mostrarBlock(Block b){
+	cout <<"Indice: "<< b.index;
+	cout <<"Owner: "<< b.node_owner_number;
+	cout <<"Difficulty:" << b.difficulty;
+	cout << "Creado:" << b.created_at;
+
+	cout <<"Nonce: " << b.nonce;
+	//for(int i = 0; i < HASH_SIZE; i++){
+//		cout << b.nonce[i];
+//	}
+//	cout << endl;
+
+	cout << "Previous Block: "<< b.previous_block_hash << endl;
+	//for(int i = 0; i < HASH_SIZE; i++){
+	//	cout << b.previous_block_hash[i];	
+	//}
+
+//	cout << endl;
+
+	cout <<"Block hash: "<< b.block_hash << endl;
+	//for(int i = 0; i < HASH_SIZE; i++){
+	//	cout << b.block_hash[i]); 	
+	//}
+	//cout << endl;
+}
+
+/*void mostrarBlock(Block b){
 	printf("Indice: %u\n", b.index);
 	printf("Owner: %u\n", b.node_owner_number);
 	printf("Difficulty: %u\n", b.difficulty);
 	printf("Creado: %lu\n", b.created_at);
 
-	printf("Nonce: %s\n", b.nonce);
-	printf("Previous Block: %s\n", b.previous_block_hash);
-	printf("Block hash: %s\n", b.block_hash);	
-}
+	printf("Nonce: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.nonce[i]);
+	}
+	printf("\n");
+
+	printf("Previous Block: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.previous_block_hash[i]);	
+	}
+	printf("\n");
+
+	printf("Block hash: ");
+	for(int i = 0; i < HASH_SIZE; i++){
+		printf("%c", b.block_hash[i]);	
+	}
+	printf("\n");
+}*/
 
 bool hashIguales(const char a[HASH_SIZE] ,const char b[HASH_SIZE]){
   bool x = true;
@@ -40,7 +78,7 @@ bool valid_new_block(const Block *block){
   bool valid = block->created_at + 60 * VALIDATION_MINUTES >= current_time;
 
   //Que el hash guardado sea válido
-  valid = valid || (block_to_str(block).compare(block->block_hash) == 0);
+  valid = true;//valid && (block_to_str(block).compare(block->block_hash) == 0);
 
   return valid;
 }

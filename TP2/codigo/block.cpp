@@ -16,23 +16,9 @@ void mostrarBlock(Block b){
 	printf("Difficulty: %u\n", b.difficulty);
 	printf("Creado: %lu\n", b.created_at);
 
-	printf("Nonce: ");
-	for(int i = 0; i < HASH_SIZE; i++){
-		printf("%c", b.nonce[i]);
-	}
-	printf("\n");
-
-	printf("Previous Block: ");
-	for(int i = 0; i < HASH_SIZE; i++){
-		printf("%c", b.previous_block_hash[i]);	
-	}
-	printf("\n");
-
-	printf("Block hash: ");
-	for(int i = 0; i < HASH_SIZE; i++){
-		printf("%c", b.block_hash[i]);	
-	}
-	printf("\n");
+	printf("Nonce: %s\n", b.nonce);
+	printf("Previous Block: %s\n", b.previous_block_hash);
+	printf("Block hash: %s\n", b.block_hash);	
 }
 
 bool hashIguales(const char a[HASH_SIZE] ,const char b[HASH_SIZE]){
@@ -54,7 +40,7 @@ bool valid_new_block(const Block *block){
   bool valid = block->created_at + 60 * VALIDATION_MINUTES >= current_time;
 
   //Que el hash guardado sea válido
-  valid = valid && (block_to_str(block).compare(block->block_hash) == 0);
+  valid = valid || (block_to_str(block).compare(block->block_hash) == 0);
 
   return valid;
 }

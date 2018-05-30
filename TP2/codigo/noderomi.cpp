@@ -27,39 +27,20 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
 	//TODO: Enviar mensaje TAG_CHAIN_HASH
 	MPI_Send((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD);
-
 	Block *blockchain = new Block[VALIDATION_BLOCKS];  
 	MPI_Status status2; 
-	int flag;
 	
-	MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status2);
-	if(flag == true){
-		if(status2.MPI_TAG == TAG_FIN){
-			Block* block = new Block;
-			MPI_Send(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD);
-			delete block;
-			return 0;
-		}
-		if(status2.MPI_TAG == TAG_CHAIN_RESPONSE){
-			MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		}
+	MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status2);
+	if(status2.MPI_TAG == TAG_FIN){
+		Block* block = new Block;
+		MPI_Send(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD);
+		delete block;
+		return 0;
+	}
+	if(status2.MPI_TAG == TAG_CHAIN_RESPONSE){
+		MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 	
-	printf("Bloques en migrar: \n");
-	for(int i = 0; i < VALIDATION_BLOCKS; i++){
-		mostrarBlock(blockchain[i]);
-		printf("\n");
-	}
-
-	int r = 0;
-	while (r < VALIDATION_BLOCKS){
-		if(blockchain[r].index != 0){
-			mostrarBlock(blockchain[r]);
-		}
-		r++;
-	}
-
-
 	if((!hashIguales(blockchain[0].block_hash, rBlock->block_hash)) or (blockchain[0].index != rBlock->index)){
 		cout << "Cadena invalida por hash o index del primero" << endl;    
 		delete []blockchain;
@@ -69,9 +50,10 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
 	string hashr;
 	block_to_hash(rBlock, hashr);
-	if(hashr!= rBlock->block_hash){
+	const char* c = hashr.c_str();
+	if(!hashIguales(c,rBlock->block_hash)){
 		cout << "Cadena invalida por funcion block to hash" << endl;
-		 delete [] blockchain;
+		delete [] blockchain;
 		 return false;
 	}
 
@@ -89,22 +71,19 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 		//Si llegamos acá la blockchain esta bien definida y es válida. 
 
 		// Por ultimo, Hay que ver si termina en el indice 1 o alguno ya estaba en mi mapa, sino descarto. 
-
-	const Block* copia = rBlock;// indice de la blockchain 0
+	
 	int j = 0;
 	bool res = false;
 	std::map<string,Block>::iterator it;
-	while((j < VALIDATION_BLOCKS) and (blockchain[j].index > 1) ){
+	while((j < VALIDATION_BLOCKS) and (blockchain[j].index > 0) and !res){
 		it = node_blocks.find(string(blockchain[j].block_hash));
  		if (it != node_blocks.end()){
  			res = res || true;//esto pasa siempre porque el receive tiene cola y el validate new block siempre agrega nuevos bloques
  		}
-    	node_blocks.erase(it);
-		copia = &blockchain[j];
 		j++;
 	}
 
-	if (blockchain[j].index == 1 || res != false){
+	if (blockchain[j-1].index == 1 || res != false){
 		printf("[%d] indice es %d y res es %d \n",mpi_rank,blockchain[j].index, res);
 		int m = 0;
 		while(blockchain[m].index > 0){
@@ -112,7 +91,7 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 			m++;
 		}
 		*last_block_in_chain = blockchain[0];
-		cout <<"[" << mpi_rank <<"]"<<"termine de migrar la cadena" << endl;
+		cout <<"[" << mpi_rank <<"]"<<" termine de migrar la cadena" << endl;
 		delete[] blockchain;
 		return true;
 	}
@@ -203,12 +182,12 @@ void* proof_of_work(void *ptr){
 		block = *last_block_in_chain;
 
 		//Preparar nuevo bloque
-		block.index += 2;
+		block.index += 1;
 		block.node_owner_number = mpi_rank;
 		block.difficulty = DEFAULT_DIFFICULTY;
 		block.created_at = static_cast<unsigned long int> (time(NULL));
 		memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
-
+		
 		if(block.index > MAX_BLOCKS){
 			Block* block = new Block;
 			for(int i = 0; i < total_nodes; i++){
@@ -217,7 +196,7 @@ void* proof_of_work(void *ptr){
 			delete block;
 			break;
 		}
-
+		
 		//Agregar un nonce al azar al bloque para intentar resolver el problema
 		gen_random_nonce(block.nonce);
 
@@ -266,13 +245,13 @@ int node(){
 	memset(last_block_in_chain->previous_block_hash,0,HASH_SIZE);
 
 	//TODO: Crear thread para minar //Punto 2
-
-	pthread_t thread[1]; 
+	pthread_t thread[1];
 	pthread_create(&thread[0], NULL, proof_of_work, NULL );
-
+	
 	Block* blockr = new Block;
 	char hash_hex_str[HASH_SIZE];
 	MPI_Status status;
+	MPI_Status status2;
 	MPI_Request request;
 	int flag;
 
@@ -297,23 +276,19 @@ int node(){
 				return 0;
 			}
 			if(status.MPI_TAG == TAG_CHAIN_HASH){
-	  			MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, MPI_STATUS_IGNORE);     
+	  			MPI_Recv(&hash_hex_str, sizeof(hash_hex_str), MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status2);
 				Block actual = node_blocks[string(hash_hex_str)];       
 				Block *lista = new Block[VALIDATION_BLOCKS];      
 				lista[0] = actual;       
 				int i = 1;
-				printf("Bloques en node: \n");
-				mostrarBlock(lista[0]);
-				printf("\n");
+				
 				while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
 					lista[i] = (node_blocks[string(actual.previous_block_hash)]);
-					mostrarBlock(lista[1]);
-					printf("\n");
 					actual = node_blocks[string(actual.previous_block_hash)];
 					i++;
 				}
 			 
-				MPI_Isend(lista, VALIDATION_BLOCKS, *MPI_BLOCK ,status.MPI_SOURCE, TAG_CHAIN_RESPONSE, MPI_COMM_WORLD, &request);       
+				MPI_Isend(lista, VALIDATION_BLOCKS, *MPI_BLOCK ,(status2.MPI_SOURCE), TAG_CHAIN_RESPONSE, MPI_COMM_WORLD, &request);       
 				delete [] lista;
 			}
 		}

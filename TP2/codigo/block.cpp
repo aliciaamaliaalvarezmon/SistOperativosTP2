@@ -9,12 +9,12 @@
 using namespace std;
 
 void mostrarBlock(Block b){
-	cout <<"Indice: "<< b.index;
-	cout <<"Owner: "<< b.node_owner_number;
-	cout <<"Difficulty:" << b.difficulty;
-	cout << "Creado:" << b.created_at;
+	cout <<"Indice: "<< b.index <<endl;
+	cout <<"Owner: "<< b.node_owner_number<<endl;
+	cout <<"Difficulty:" << b.difficulty<<endl;
+	cout << "Creado:" << b.created_at<<endl;
 
-	cout <<"Nonce: " << b.nonce;
+	cout <<"Nonce: " << b.nonce<<endl;
 	//for(int i = 0; i < HASH_SIZE; i++){
 //		cout << b.nonce[i];
 //	}

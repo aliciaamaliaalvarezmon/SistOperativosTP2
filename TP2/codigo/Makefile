@@ -6,7 +6,7 @@ CFLAGS+= -Wall -std=c++11 -pthread -g $(INCL)
 CC=gcc
 MPICC=  $(MPIROOT)/bin/mpic++
 INCL= -I$(MPIROOT)/include
-SRCS= node.cpp block.cpp blockchain.cpp
+SRCS= noderomi.cpp block.cpp blockchain.cpp
 BIN= blockchain
 
 

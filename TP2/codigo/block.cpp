@@ -63,7 +63,7 @@ bool hashIguales(const char a[HASH_SIZE] ,const char b[HASH_SIZE]){
   bool x = true;
   for(int i = 0; i < HASH_SIZE; i++){
 	if(a[i] != b[i]){
-	  x = false;
+		x = false;
 	}
   }
   return x;
@@ -78,7 +78,9 @@ bool valid_new_block(const Block *block){
   bool valid = block->created_at + 60 * VALIDATION_MINUTES >= current_time;
 
   //Que el hash guardado sea válido
-  valid = true;//valid && (block_to_str(block).compare(block->block_hash) == 0);
+  string hash_hex_str;
+  block_to_hash(block,hash_hex_str);
+  valid = valid && (hash_hex_str.compare(block->block_hash) == 0);
 
   return valid;
 }

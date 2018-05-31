@@ -21,47 +21,44 @@ map<string,Block> node_blocks;
 mutex primer;
 mutex second;
 bool listo = false;
+bool bandera = false;
 //mutex tercer[8];
 
 bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
 	//TODO: Enviar mensaje TAG_CHAIN_HASH
 	MPI_Request request;
-	bool flag = true;
-
-
+	
 	MPI_Isend((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD, &request);
 	Block *blockchain = new Block[VALIDATION_BLOCKS];  
-	MPI_Status status2; 
-	
-	while(flag){
-		MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status2);
+	MPI_Status status2;
+
+	status2.MPI_SOURCE = -1;
+	while((status2.MPI_SOURCE != status->MPI_SOURCE) or (status2.MPI_TAG != TAG_CHAIN_RESPONSE)){
+		MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, MPI_ANY_SOURCE,  MPI_ANY_TAG, MPI_COMM_WORLD, &status2);
 		if(status2.MPI_TAG == TAG_FIN){
-			Block* block = new Block;
-			MPI_Send(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD);
-			delete block;
+			bandera = true;
+			delete blockchain;	
 			return 0;
 		}
-		if(status2.MPI_TAG == TAG_CHAIN_RESPONSE && status2.MPI_SOURCE == status->MPI_SOURCE){
-			flag = false;
-			MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		}
 	}
-
+	
 	if((hashIguales(blockchain[0].block_hash, rBlock->block_hash) == false) or (blockchain[0].index != rBlock->index)){
 		cout << "Cadena invalida por hash o index del primero" << endl;    
 		delete []blockchain;
 		return false;
 	}  
 
-	/*string hashr;
+	
+	string hashr;
 	block_to_hash(rBlock, hashr);
-	const char* c = hashr.c_str();
-	if(hashIguales(c,rBlock->block_hash) == false){
+	string aux(rBlock->block_hash);
+	if(hashr.compare(aux) != 0){
 		cout << "Cadena invalida por funcion block to hash" << endl;
 		delete [] blockchain;
 		return false;
-	}*/
+	}
+	
 
 	const Block* actual = rBlock;// indice de la blockchain 0
 	int i = 1;
@@ -104,6 +101,7 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 	
 	delete []blockchain;
 	return false;
+
 }
 
 bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
@@ -196,12 +194,15 @@ void* proof_of_work(void *ptr){
 		memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
 		
 		if(block.index > MAX_BLOCKS){
-			Block* block = new Block;
+			int number=0;
 			for(int i = 0; i < total_nodes; i++){
-				MPI_Send(block, 1, *MPI_BLOCK, i, TAG_FIN, MPI_COMM_WORLD);
+				if (i != mpi_rank){
+					MPI_Send(&number, 1, MPI_INT, i, TAG_FIN, MPI_COMM_WORLD);
+				}else{
+					bandera = true;
+				}
 			}
-			delete block;
-			break;
+			return NULL;
 		}
 		
 		//Agregar un nonce al azar al bloque para intentar resolver el problema
@@ -265,11 +266,19 @@ int node(){
 
 	while(true){
 		//if (mpi_rank == 1) sleep(5);
+		if(bandera ==true){
+			listo = true;
+			pthread_join(thread[0], NULL);
+			printf("Listo: %d\n", mpi_rank);
+			delete last_block_in_chain;
+			delete blockr;
+			return 0;
+		}
 
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 		if(flag == true){
 			if(status.MPI_TAG == TAG_NEW_BLOCK){
-				MPI_Recv(blockr, 1, *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				MPI_Recv(blockr, 1, *MPI_BLOCK, MPI_ANY_SOURCE, TAG_NEW_BLOCK, MPI_COMM_WORLD, &status);
 				primer.lock();
 				validate_block_for_chain(blockr, &status);
 				primer.unlock();
@@ -284,17 +293,15 @@ int node(){
 			}
 			if(status.MPI_TAG == TAG_CHAIN_HASH){
 	  			MPI_Recv(&hash_hex_str, HASH_SIZE, MPI_CHAR, MPI_ANY_SOURCE, TAG_CHAIN_HASH, MPI_COMM_WORLD, &status2);
-				Block actual = node_blocks[string(hash_hex_str)];       
+				Block actual = node_blocks[string(hash_hex_str)];
 				Block *lista = new Block[VALIDATION_BLOCKS];      
 				lista[0] = actual;       
 				int i = 1;
-				
 				while((i  < VALIDATION_BLOCKS) and (actual.index > 0)){
 					lista[i] = (node_blocks[string(actual.previous_block_hash)]);
 					actual = node_blocks[string(actual.previous_block_hash)];
 					i++;
 				}
-
 				MPI_Isend(lista, VALIDATION_BLOCKS, *MPI_BLOCK ,(status2.MPI_SOURCE), TAG_CHAIN_RESPONSE, MPI_COMM_WORLD, &request);       
 				delete [] lista;
 			}

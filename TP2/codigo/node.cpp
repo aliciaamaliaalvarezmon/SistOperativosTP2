@@ -16,6 +16,7 @@ Block *last_block_in_chain; //  Block *last_block_in_chain to const Block *last_
 map<string,Block> node_blocks;
 mutex primer;
 mutex segundo;
+bool listo = false;
 //mutex tercer[8];
 
 //Cuando me llega una cadena adelantada, y tengo que pedir los nodos que me faltan
@@ -24,19 +25,23 @@ mutex segundo;
 //int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
 bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
-	//TODO: Enviar mensaje TAG_CHAIN_HASH
+  MPI_Status status2; 
+  Block *blockchain = new Block[VALIDATION_BLOCKS]; 
+  int flag;
+  MPI_Iprobe(MPI_ANY_SOURCE, TAG_FIN, MPI_COMM_WORLD, &flag, &status2);
+  if(flag){
+    Block* block = new Block;
+    MPI_Send(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD);
+    delete block;
+    return 0;
+  }else{
+    MPI_Send((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD);
+    //Block *blockchain = new Block[VALIDATION_BLOCKS];    
+    MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    
+  }
 
- MPI_Send((rBlock->block_hash),HASH_SIZE, MPI_CHAR, (status->MPI_SOURCE),TAG_CHAIN_HASH, MPI_COMM_WORLD);
 
-	Block *blockchain = new Block[VALIDATION_BLOCKS];  
-	//TODO: Recibir mensaje TAG_CHAIN_RESPONSE
-	//MPI_Status status2; 
-
-	MPI_Recv(blockchain, VALIDATION_BLOCKS, *MPI_BLOCK, (status->MPI_SOURCE), TAG_CHAIN_RESPONSE,  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	//TODO: Verificar que los bloques recibidos
-	//sean válidos y se puedan acoplar a la cadena
-		//delete []blockchain;
-		//return true;
 
 	if((!hashIguales(blockchain[0].block_hash, rBlock->block_hash)) or  (blockchain[0].index != rBlock->index) ){
 		cout << "Cadena invalida por hash o index del primero" << endl;    
@@ -118,6 +123,17 @@ bool verificar_y_migrar_cadena(const Block *rBlock, const MPI_Status *status){
 
 //Verifica que el bloque tenga que ser incluido en la cadena, y lo agrega si corresponde
 bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
+	
+	MPI_Status status2;
+	int flag;
+ 	MPI_Iprobe(MPI_ANY_SOURCE, TAG_FIN, MPI_COMM_WORLD, &flag, &status2);
+  	if(flag){
+   	 Block* block = new Block;
+   	 MPI_Send(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD);
+   	 delete block;
+   	 return false;
+  	}
+
 	if(valid_new_block(rBlock)){
 
 		//Agrego el bloque al diccionario, aunque no
@@ -163,7 +179,7 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
 				bool res = verificar_y_migrar_cadena(rBlock,status);
 				//tercer[mpi_rank].unlock();
 				return res;
-		}
+		}else{
 
 
 		//TODO: Si el índice del bloque recibido es igua al índice de mi último bloque actual,
@@ -195,6 +211,7 @@ bool validate_block_for_chain(const Block *rBlock, const MPI_Status *status){
 			bool res = verificar_y_migrar_cadena(rBlock,status);
 			//tercer[mpi_rank].unlock();
 			return res;
+			}
 		} 
 	}
 
@@ -225,6 +242,10 @@ void* proof_of_work(void *ptr){
 		Block block;
 		unsigned int mined_blocks = 0;
 		while(true){
+
+			if(listo){
+			pthread_exit(NULL);
+			}
 				
 			block = *last_block_in_chain;
 
@@ -236,11 +257,15 @@ void* proof_of_work(void *ptr){
 			memcpy(block.previous_block_hash,block.block_hash,HASH_SIZE);
 
 			if(block.index > MAX_BLOCKS){				
+				cout << "llegue al 201" << endl;				
 				Block* block = new Block;
-				//MPI_Request request;
-				for(int i = 0; i < total_nodes; i++){
-					MPI_Send(block, 1, *MPI_BLOCK, i, TAG_FIN, MPI_COMM_WORLD);
-				}
+				MPI_Request request;
+				for(int i = 0; i < total_nodes; i++){						
+					if (i !=  mpi_rank){				
+					MPI_Isend(block, 1, *MPI_BLOCK, i, TAG_FIN, MPI_COMM_WORLD, &request);		
+					}			
+				}	
+					MPI_Isend(block, 1, *MPI_BLOCK, mpi_rank, TAG_FIN, MPI_COMM_WORLD, &request);					
 				delete block;
 				break;
 			}
@@ -323,7 +348,8 @@ int node(){
 			if(status.MPI_TAG==TAG_FIN){
 
 				//segundo.lock();
-				//MPI_Recv(blockr, 1, *MPI_BLOCK, MPI_ANY_SOURCE, TAG_FIN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);				
+				MPI_Recv(blockr, 1, *MPI_BLOCK, MPI_ANY_SOURCE, TAG_FIN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);	
+				listo = true;			
 +				pthread_join(thread[0], NULL);					
 				printf("Listo: %d\n", mpi_rank);
 				delete last_block_in_chain;		
